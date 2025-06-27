@@ -18,6 +18,7 @@ from deduplication.checker import DeduplicationChecker
 from ideas.composer import IdeaComposer
 from llm_modules.reasoning import ReasoningEngine
 from output.export import IdeaExporter
+from feedback.collector import collect_ratings
 from retrievers.jira_retriever import get_roadmap_ideas
 from retrievers.roadmap_retriever import retrieve_roadmap_documents
 
@@ -99,6 +100,8 @@ class AgentOrchestrator:
         # Export ideas in Markdown format as well
         markdown_items = [idea["markdown"] for idea in composed]
         self.exporter.export_markdown(markdown_items, "output/ideas.md")
+
+        collect_ratings(composed)
 
         return composed
 

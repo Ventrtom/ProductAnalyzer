@@ -123,9 +123,9 @@ Create a `.env` file in the project root based on `.env.example` and set:
 
 ## 🚧 Milestone Plan (MVP)
 
-1. [ ] Create retrievers for documentation and JIRA
-2. [ ] Setup basic LangChain or custom orchestrator
-3. [ ] Connect reasoning via GPT-4o
-4. [ ] Implement deduplication check
-5. [ ] Generate 1–2 ideas and export to Markdown
-6. [ ] Add feedback loop for evaluation
+1. [x] Create retrievers for documentation and JIRA
+2. [x] Setup basic LangChain or custom orchestrator
+3. [x] Connect reasoning via GPT-4o
+4. [x] Implement deduplication check
+5. [x] Generate 1–2 ideas and export to Markdown
+6. [x] Add feedback loop for evaluation

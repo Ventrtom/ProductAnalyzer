@@ -42,6 +42,8 @@ def test_run_agent_with_mocks(tmp_path, monkeypatch):
     issues_mock = MagicMock(return_value=issues)
     analyze_mock = MagicMock(return_value=ideas)
 
+    rating_mock = MagicMock()
+
     def export_mock(items, path):
         # Write a simple file to emulate export
         with open(path, "w", encoding="utf-8") as f:
@@ -55,6 +57,7 @@ def test_run_agent_with_mocks(tmp_path, monkeypatch):
     monkeypatch.setattr(orchestrator, func, issues_mock)
     monkeypatch.setattr(orchestrator.ReasoningEngine, "analyze", analyze_mock)
     monkeypatch.setattr(orchestrator.IdeaExporter, "export_markdown", export_magic)
+    monkeypatch.setattr(orchestrator, "collect_ratings", rating_mock)
 
     agent = AgentOrchestrator(
         roadmap_url="http://example.com",
@@ -79,3 +82,4 @@ def test_run_agent_with_mocks(tmp_path, monkeypatch):
         data = json.load(f)
     assert data and data[0]["title"] == "New Idea"
     assert result[0]["title"] == "New Idea"
+    rating_mock.assert_called_once_with(result)
