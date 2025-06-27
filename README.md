@@ -25,7 +25,35 @@ Its purpose is to suggest **novel, feasible, and impactful ideas**, identify **s
    python orchestrator.py
    ```
 
+4. Run the test-suite to verify your setup:
+   ```bash
+   pytest -q
+   ```
+
 OpenAI API calls require a valid `OPENAI_API_KEY` in your environment.
+
+
+## 🏃 Usage
+
+Running the orchestrator will crawl the roadmap URL, fetch JIRA issues and
+write generated ideas to the `output/` directory:
+
+```bash
+python orchestrator.py
+```
+
+The resulting `ideas.json` and `ideas.md` files contain structured suggestions
+that you can further review or import into your tooling.
+
+## ✔️ Running Tests
+
+Unit tests cover all modules and can be executed with `pytest` from the project
+root. This is useful to confirm that optional environment variables are set
+correctly and that the basic workflow still works:
+
+```bash
+pytest -q
+```
 
 
 ## 📦 Architecture Overview
