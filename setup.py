@@ -11,5 +11,6 @@ setup(
         "atlassian-python-api>=3.41",
         "requests>=2.31",
         "streamlit>=1.28",
+        "beautifulsoup4>=4.12",
     ],
 )
