@@ -73,6 +73,8 @@ Create a `.env` file in the project root based on `.env.example` and set:
 - `JIRA_URL` – Base URL of your JIRA instance
 - `JIRA_PROJECT_KEY` – Project key to fetch issues from
 - `JIRA_AUTH_TOKEN` – Base64 token used for Basic Auth
+- `OPENAI_API_KEY` – API key for OpenAI models
+- `ROADMAP_URL` – URL of the roadmap service
 
 ---
 
