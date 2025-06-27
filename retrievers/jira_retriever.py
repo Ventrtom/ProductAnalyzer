@@ -1,298 +1,90 @@
-# jira_retriever.py
-
-from __future__ import annotations
-
-"""Retrieve JIRA issues for the orchestrator."""
-
+#!/usr/bin/env python3
 import os
 import logging
-from typing import List, Optional
-
 import requests
-from requests.exceptions import HTTPError
+from typing import List, Dict, Any
 from dotenv import load_dotenv
-from pydantic import BaseModel
-from tenacity import retry, stop_after_attempt, wait_exponential
 
-# Load environment variables from .env file
+# 1) Načtení .env proměnných
 load_dotenv()
+JIRA_URL         = os.getenv("JIRA_URL")
+JIRA_USER        = os.getenv("JIRA_USER")
+JIRA_AUTH_TOKEN  = os.getenv("JIRA_AUTH_TOKEN")
+JIRA_JQL         = os.getenv("JIRA_JQL", "project = P4 ORDER BY created DESC")
+JIRA_MAX_RESULTS = int(os.getenv("JIRA_MAX_RESULTS", "50"))
 
-logger = logging.getLogger(__name__)
+# 2) Logger
+logger = logging.getLogger("jira_fetcher")
+logger.setLevel(logging.DEBUG)
+handler = logging.StreamHandler()
+handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+logger.addHandler(handler)
 
-JIRA_URL = os.getenv("JIRA_URL")
-JIRA_PROJECT_KEY = os.getenv("JIRA_PROJECT_KEY")
-JIRA_AUTH_TOKEN = os.getenv("JIRA_AUTH_TOKEN")
-# Optional JQL query overriding the project key
-JIRA_JQL = os.getenv("JIRA_JQL")
+def _extract_adf_text(node: Dict[str, Any]) -> str:
+    """
+    Rekurzivně projde Atlassian Document Format (ADF) a vrátí čistý text.
+    """
+    text = ""
+    if isinstance(node, dict):
+        if node.get("text"):
+            text += node["text"]
+        for child in node.get("content", []):
+            text += _extract_adf_text(child)
+    elif isinstance(node, list):
+        for item in node:
+            text += _extract_adf_text(item)
+    return text
 
-if not JIRA_URL or not JIRA_AUTH_TOKEN:
-    raise EnvironmentError("JIRA_URL and JIRA_AUTH_TOKEN must be set")
-
-logger.debug(
-    "Environment loaded JIRA_URL=%s JIRA_PROJECT_KEY=%s JIRA_JQL=%s",
-    JIRA_URL,
-    JIRA_PROJECT_KEY,
-    JIRA_JQL,
-)
-
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=5), reraise=True)
-def _jira_get(
-    endpoint: str,
-    params: dict[str, object],
-    auth_token: str | None = None,
-    *,
-    jira_url: str | None = None,
-) -> dict:
-    """Low level GET helper with retry."""
-
-    jira_url = jira_url or JIRA_URL
-    auth_token = auth_token or JIRA_AUTH_TOKEN
-
-    url = f"{jira_url.rstrip('/')}/{endpoint.lstrip('/')}"
-    headers = {
-        "Authorization": f"Basic {auth_token}",
-        "Accept": "application/json",
+def fetch_jira_issues(
+    jql: str = JIRA_JQL,
+    max_results: int = JIRA_MAX_RESULTS
+) -> List[Dict[str, Any]]:
+    """
+    Zavolá Jira REST API /search a vrátí seznam issue dictů:
+      { key, summary, description, status, labels }
+    """
+    url = f"{JIRA_URL}/rest/api/3/search"
+    params = {
+        "jql": jql,
+        "maxResults": max_results,
+        "fields": "summary,description,status,labels"
     }
+    auth = (JIRA_USER, JIRA_AUTH_TOKEN)
+    headers = {"Accept": "application/json"}
 
-    logger.debug(
-        "_jira_get called with endpoint=%s jira_url=%s params=%s",
-        endpoint,
-        jira_url,
-        params,
-    )
-    logger.debug("Request URL: %s", url)
+    logger.debug(f"GET {url} params={params}")
+    resp = requests.get(url, headers=headers, params=params, auth=auth)
+    try:
+        resp.raise_for_status()
+    except requests.HTTPError:
+        logger.error(f"HTTP {resp.status_code} – {resp.text}")
+        raise
 
-    resp = requests.get(url, headers=headers, params=params, timeout=30)
-    logger.debug("Response status: %s", resp.status_code)
-    resp.raise_for_status()
     data = resp.json()
-    logger.debug("Response JSON: %s", data)
-    return data
+    issues = []
+    for issue in data.get("issues", []):
+        f = issue.get("fields", {})
+        # description může být None nebo ADF dict
+        raw_desc = f.get("description")
+        if raw_desc:
+            description = _extract_adf_text(raw_desc)
+        else:
+            description = ""
+        issues.append({
+            "key":         issue.get("key"),
+            "summary":     f.get("summary", ""),
+            "description": description,
+            "status":      f.get("status", {}).get("name", ""),
+            "labels":      f.get("labels", []),
+        })
 
-class JiraIssue(BaseModel):
-    key: str
-    summary: Optional[str]
-    description: Optional[str]
-    status: Optional[str]
-    labels: Optional[List[str]]
-
-def _fetch_issues(jira_url: str, auth_token: str, jql: str, max_results: int) -> List[JiraIssue]:
-    """Fetch issues from JIRA using the given JQL query."""
-
-    endpoint = "rest/api/2/search"
-    start_at = 0
-    issues: List[JiraIssue] = []
-
-    logger.debug(
-        "Starting issue fetch with jql=%s max_results=%d",
-        jql,
-        max_results,
-    )
-
-    while True:
-        logger.debug("Fetching page starting at %d", start_at)
-        params = {
-            "jql": jql,
-            "startAt": start_at,
-            "maxResults": max_results,
-            "fields": "summary,description,status,labels",
-        }
-        logger.debug("Request params: %s", params)
-        try:
-            data = _jira_get(endpoint, params, auth_token, jira_url=jira_url)
-        except HTTPError as e:
-            logger.error("JIRA Error response: %s", e.response.text)
-            raise
-
-        logger.debug("Received %d issues", len(data.get("issues", [])))
-        for raw in data.get("issues", []):
-            logger.debug("Processing raw issue: %s", raw.get("key"))
-            f = raw.get("fields", {})
-            issues.append(
-                JiraIssue(
-                    key=raw.get("key"),
-                    summary=f.get("summary"),
-                    description=f.get("description"),
-                    status=(f.get("status") or {}).get("name"),
-                    labels=f.get("labels", []),
-                )
-            )
-
-        total = data.get("total", 0)
-        start_at += max_results
-        if start_at >= total:
-            break
-
-    logger.debug("Total issues fetched: %d", len(issues))
+    logger.info(f"Načteno {len(issues)} issue(s).")
     return issues
 
-def fetch_all_issues(project_key: str = JIRA_PROJECT_KEY, max_results: int = 50) -> List[JiraIssue]:
-    """Compatibility wrapper returning all issues for a project."""
-
-    if not project_key:
-        raise ValueError("Project key must be provided when JIRA_JQL is not used")
-    # Quote the project key to avoid JQL syntax errors for non-alphanumeric keys
-    jql = f'project="{project_key}"'
-    logger.debug(
-        "fetch_all_issues called with project_key=%s max_results=%d",
-        project_key,
-        max_results,
-    )
-    return _fetch_issues(JIRA_URL, JIRA_AUTH_TOKEN, jql, max_results)
-
-def get_roadmap_ideas(
-    jira_url: str | None = None,
-    project_key: str | None = None,
-    auth_token: str | None = None,
-    jql: str | None = None,
-    max_results: int = 50,
-) -> List[dict]:
-    """Return roadmap ideas from JIRA as list of plain dicts."""
-
-    jira_url = jira_url or JIRA_URL
-    auth_token = auth_token or JIRA_AUTH_TOKEN
-    project_key = project_key or JIRA_PROJECT_KEY
-    if jql:
-        final_jql = jql
-    elif JIRA_JQL:
-        final_jql = JIRA_JQL
-    elif project_key:
-        # Quote the project key to avoid issues with numeric or special keys
-        final_jql = f'project="{project_key}"'
-    else:
-        final_jql = None
-
-    logger.debug(
-        "get_roadmap_ideas called with jira_url=%s project_key=%s jql=%s max_results=%d",
-        jira_url,
-        project_key,
-        jql,
-        max_results,
-    )
-
-    if not jira_url or not auth_token:
-        raise ValueError("Missing JIRA_URL or JIRA_AUTH_TOKEN")
-    if not final_jql:
-        raise ValueError("JQL query could not be determined")
-
-    issues = _fetch_issues(jira_url, auth_token, final_jql, max_results)
-    result = [issue.model_dump(exclude={"labels"}) for issue in issues]
-    logger.debug("Returning %d roadmap ideas", len(result))
-    return result
-
-
-def list_roadmap_topics(
-    jira_url: str | None = None,
-    project_key: str | None = None,
-    auth_token: str | None = None,
-    jql: str | None = None,
-    max_results: int = 50,
-) -> List[str]:
-    """Return a list of existing roadmap topic titles from JIRA.
-
-    Parameters
-    ----------
-    jira_url:
-        Base URL of the JIRA instance. If omitted, ``JIRA_URL`` from the
-        environment is used.
-    project_key:
-        Key of the project to search in. Falls back to ``JIRA_PROJECT_KEY``.
-    auth_token:
-        Base64 encoded authentication token. Defaults to ``JIRA_AUTH_TOKEN``.
-    jql:
-        Custom JQL query. If not provided ``JIRA_JQL`` or the project key is
-        used.
-    max_results:
-        Number of results to fetch per request when paging.
-    """
-
-    jira_url = jira_url or JIRA_URL
-    project_key = project_key or JIRA_PROJECT_KEY
-    auth_token = auth_token or JIRA_AUTH_TOKEN
-    jql = jql or JIRA_JQL or (f'project="{project_key}"' if project_key else None)
-
-    if not jira_url or not auth_token or not jql:
-        raise ValueError("Missing required JIRA configuration")
-
-    search_url = f"{jira_url.rstrip('/')}/rest/api/2/search"
-    headers = {
-        "Authorization": f"Basic {auth_token}",
-        "Accept": "application/json",
-    }
-
-    start_at = 0
-    topics: List[str] = []
-
-    while True:
-        params = {
-            "jql": jql,
-            "startAt": start_at,
-            "maxResults": max_results,
-            "fields": "summary",
-        }
-        resp = requests.get(search_url, headers=headers, params=params, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-
-        for issue in data.get("issues", []):
-            summary = (issue.get("fields") or {}).get("summary")
-            if summary:
-                topics.append(summary)
-
-        total = data.get("total", 0)
-        start_at += max_results
-        if start_at >= total:
-            break
-
-    return topics
-
-class JiraRetriever:
-    """Backward compatible class-based API."""
-
-    def __init__(self, url: str, username: str, token: str) -> None:
-        self.base_url = url.rstrip("/")
-        self.token = token
-        logger.debug(
-            "Initialized JiraRetriever with base_url=%s username=%s",
-            self.base_url,
-            username,
-        )
-
-    def fetch_issues(self, project_key: str, max_results: int = 50) -> List[dict]:
-        logger.debug(
-            "JiraRetriever.fetch_issues called with project_key=%s max_results=%d",
-            project_key,
-            max_results,
-        )
-        return get_roadmap_ideas(
-            jira_url=self.base_url,
-            project_key=project_key,
-            auth_token=self.token,
-            max_results=max_results,
-        )
-
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=5), reraise=True)
-def _get(url: str, params: dict[str, str], token: str) -> dict:
-    """Legacy helper kept for compatibility."""
-    headers = {
-        "Authorization": f"Basic {token}",
-        "Accept": "application/json",
-    }
-    logger.debug(
-        "_get called with url=%s params=%s token_provided=%s",
-        url,
-        params,
-        bool(token),
-    )
-    resp = requests.get(url, params=params, headers=headers, timeout=30)
-    logger.debug("Legacy _get response status: %s", resp.status_code)
-    resp.raise_for_status()
-    data = resp.json()
-    logger.debug("Legacy _get response JSON: %s", data)
-    return data
-
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    issues = get_roadmap_ideas()
-    for issue in issues:
-        print(issue)
+    all_issues = fetch_jira_issues()
+    for iss in all_issues:
+        print(f"{iss['key']:10} | {iss['status']:15} | {iss['summary']}")
+        print(f"  Labels: {', '.join(iss['labels']) or '-'}")
+        print(f"  Description:\n{iss['description'] or '- žádný popis -'}")
+        print("-" * 80)
