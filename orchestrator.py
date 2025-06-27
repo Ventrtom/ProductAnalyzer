@@ -62,8 +62,13 @@ class AgentOrchestrator:
         print("\n== Running reasoning engine ==")
         ideas = self.reasoning.analyze(roadmap_docs, jira_issues)
 
-        # Placeholder: integrate deduplication layer here
-        # ideas = [i for i in ideas if not self.dedup_checker.is_duplicate(i)]
+        # Filter out ideas we've already seen
+        deduped: List[dict] = []
+        for idea in ideas:
+            if not self.dedup_checker.is_duplicate(idea):
+                deduped.append(idea)
+                self.dedup_checker.add(idea)
+        ideas = deduped
 
         if not ideas:
             print("No ideas generated")
