@@ -13,6 +13,21 @@ Its purpose is to suggest **novel, feasible, and impactful ideas**, identify **s
 
 ---
 
+## 🚀 Getting Started
+
+1. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. Create a `.env` file in the project root based on `.env.example` and add your values.
+3. Run the orchestrator from the project root:
+   ```bash
+   python orchestrator.py
+   ```
+
+OpenAI API calls require a valid `OPENAI_API_KEY` in your environment.
+
+
 ## 📦 Architecture Overview
 
 User Prompt
