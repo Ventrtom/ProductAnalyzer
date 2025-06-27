@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from typing import List
 
 from dotenv import load_dotenv
@@ -18,6 +19,15 @@ from llm_modules.reasoning import ReasoningEngine
 from output.export import IdeaExporter
 from retrievers.jira_retriever import get_roadmap_ideas
 from retrievers.roadmap_retriever import retrieve_roadmap_documents
+
+
+def require_env(keys: list[str]) -> None:
+    """Ensure required environment variables are present."""
+
+    missing = [k for k in keys if not os.getenv(k)]
+    if missing:
+        print("Missing required environment variables: " + ", ".join(missing))
+        sys.exit(1)
 
 
 class AgentOrchestrator:
@@ -87,10 +97,20 @@ def main() -> None:
 
     load_dotenv()
 
-    roadmap_url = os.getenv("ROADMAP_URL", "http://localhost:8000")
-    jira_url = os.getenv("JIRA_URL")
-    jira_project = os.getenv("JIRA_PROJECT_KEY", "PROJ")
-    jira_token = os.getenv("JIRA_AUTH_TOKEN")
+    require_env(
+        [
+            "JIRA_URL",
+            "JIRA_PROJECT_KEY",
+            "JIRA_AUTH_TOKEN",
+            "OPENAI_API_KEY",
+            "ROADMAP_URL",
+        ]
+    )
+
+    roadmap_url = os.environ["ROADMAP_URL"]
+    jira_url = os.environ["JIRA_URL"]
+    jira_project = os.environ["JIRA_PROJECT_KEY"]
+    jira_token = os.environ["JIRA_AUTH_TOKEN"]
 
     orchestrator = AgentOrchestrator(
         roadmap_url=roadmap_url,
