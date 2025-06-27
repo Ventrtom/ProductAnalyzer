@@ -1,24 +1,30 @@
 import sys
-import os
 import pathlib
+import importlib
 
 # Ensure project root is on the path before importing the retriever
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-# Provide dummy environment so ``jira_retriever`` does not fail on import
-os.environ.setdefault("JIRA_URL", "https://jira.example.com")
-os.environ.setdefault("JIRA_PROJECT_KEY", "PRJ")
-os.environ.setdefault("JIRA_AUTH_TOKEN", "token")
+import pytest
 
-from retrievers import jira_retriever
-from retrievers.jira_retriever import fetch_all_issues, _jira_get
+
+@pytest.fixture(autouse=True)
+def jira_module(monkeypatch):
+    monkeypatch.setenv("JIRA_URL", "https://jira.example.com")
+    monkeypatch.setenv("JIRA_PROJECT_KEY", "PRJ")
+    monkeypatch.setenv("JIRA_AUTH_TOKEN", "token")
+
+    from retrievers import jira_retriever
+    importlib.reload(jira_retriever)
+    yield jira_retriever
+
+
 import requests
 import requests_mock
-import pytest
 import tenacity
 
 
-def test_fetch_issues_pagination(monkeypatch):
+def test_fetch_issues_pagination(jira_module, monkeypatch):
     base_url = "https://jira.example.com"
     search_url = base_url + "/rest/api/2/search"
 
@@ -74,9 +80,9 @@ def test_fetch_issues_pagination(monkeypatch):
             ],
         )
 
-        monkeypatch.setattr(jira_retriever, "JIRA_URL", base_url)
+        monkeypatch.setattr(jira_module, "JIRA_URL", base_url)
 
-        issues = fetch_all_issues("PRJ", max_results=2)
+        issues = jira_module.fetch_all_issues("PRJ", max_results=2)
 
         assert len(issues) == 3
         assert issues[0].key == "PRJ-1"
@@ -87,33 +93,33 @@ def test_fetch_issues_pagination(monkeypatch):
         assert starts == [0, 2]
 
 
-def test__jira_get_success_and_error(monkeypatch):
+def test__jira_get_success_and_error(jira_module, monkeypatch):
     url = "https://api.example.com"
     params = {"a": "1"}
     token = "tok"
 
-    monkeypatch.setattr(jira_retriever, "JIRA_URL", url)
+    monkeypatch.setattr(jira_module, "JIRA_URL", url)
 
     with requests_mock.Mocker() as m:
         m.get(url + "/", json={"ok": True}, status_code=200)
-        result = _jira_get("", params, token)
+        result = jira_module._jira_get("", params, token)
         assert result == {"ok": True}
         assert m.last_request.headers["Authorization"] == f"Basic {token}"
 
     with requests_mock.Mocker() as m:
         m.get(url + "/", status_code=500)
-        _jira_get.retry.stop = tenacity.stop_after_attempt(1)
-        _jira_get.retry.wait = tenacity.wait_none()
+        jira_module._jira_get.retry.stop = tenacity.stop_after_attempt(1)
+        jira_module._jira_get.retry.wait = tenacity.wait_none()
         with pytest.raises(requests.HTTPError):
-            _jira_get("", params, token)
+            jira_module._jira_get("", params, token)
 
 
-def test_fetch_all_issues(monkeypatch):
+def test_fetch_all_issues(jira_module, monkeypatch):
     url = "https://jira.example.com"
     project = "PRJ"
     search_url = url + "/rest/api/2/search"
 
-    monkeypatch.setattr(jira_retriever, "JIRA_URL", url)
+    monkeypatch.setattr(jira_module, "JIRA_URL", url)
 
     data = {
         "issues": [
@@ -133,7 +139,7 @@ def test_fetch_all_issues(monkeypatch):
 
     with requests_mock.Mocker() as m:
         m.get(search_url, json=data, status_code=200)
-        issues = fetch_all_issues(project_key=project)
+        issues = jira_module.fetch_all_issues(project_key=project)
         assert len(issues) == 1
         issue = issues[0]
         assert issue.key == "PRJ-1"
