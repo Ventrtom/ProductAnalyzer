@@ -9,7 +9,6 @@ import os
 import requests
 from pydantic import BaseModel
 from tenacity import retry, stop_after_attempt, wait_exponential
-from dotenv import load_dotenv
 
 
 class JiraRetriever:
@@ -99,7 +98,9 @@ def get_roadmap_ideas(
 ) -> List[Dict]:
     """Fetch all issues from ``project_key`` and return minimal idea dicts."""
 
-    load_dotenv()
+    # Environment variables are optionally loaded by the orchestrator, so avoid
+    # implicitly reading from a ``.env`` file here.  This makes unit tests
+    # deterministic because they can control ``os.environ`` directly.
     jira_url = jira_url or os.getenv("JIRA_URL")
     project_key = project_key or os.getenv("JIRA_PROJECT_KEY")
     auth_token = auth_token or os.getenv("JIRA_AUTH_TOKEN")
@@ -140,5 +141,6 @@ def get_roadmap_ideas(
             break
         start_at = retrieved
 
-    return [issue.dict() for issue in issues]
+    # ``model_dump`` avoids deprecation warnings on Pydantic v2
+    return [issue.model_dump() for issue in issues]
 
