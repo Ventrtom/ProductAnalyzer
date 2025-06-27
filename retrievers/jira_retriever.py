@@ -180,6 +180,72 @@ def get_roadmap_ideas(
     logger.debug("Returning %d roadmap ideas", len(result))
     return result
 
+
+def list_roadmap_topics(
+    jira_url: str | None = None,
+    project_key: str | None = None,
+    auth_token: str | None = None,
+    jql: str | None = None,
+    max_results: int = 50,
+) -> List[str]:
+    """Return a list of existing roadmap topic titles from JIRA.
+
+    Parameters
+    ----------
+    jira_url:
+        Base URL of the JIRA instance. If omitted, ``JIRA_URL`` from the
+        environment is used.
+    project_key:
+        Key of the project to search in. Falls back to ``JIRA_PROJECT_KEY``.
+    auth_token:
+        Base64 encoded authentication token. Defaults to ``JIRA_AUTH_TOKEN``.
+    jql:
+        Custom JQL query. If not provided ``JIRA_JQL`` or the project key is
+        used.
+    max_results:
+        Number of results to fetch per request when paging.
+    """
+
+    jira_url = jira_url or JIRA_URL
+    project_key = project_key or JIRA_PROJECT_KEY
+    auth_token = auth_token or JIRA_AUTH_TOKEN
+    jql = jql or JIRA_JQL or (f'project="{project_key}"' if project_key else None)
+
+    if not jira_url or not auth_token or not jql:
+        raise ValueError("Missing required JIRA configuration")
+
+    search_url = f"{jira_url.rstrip('/')}/rest/api/2/search"
+    headers = {
+        "Authorization": f"Basic {auth_token}",
+        "Accept": "application/json",
+    }
+
+    start_at = 0
+    topics: List[str] = []
+
+    while True:
+        params = {
+            "jql": jql,
+            "startAt": start_at,
+            "maxResults": max_results,
+            "fields": "summary",
+        }
+        resp = requests.get(search_url, headers=headers, params=params, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+
+        for issue in data.get("issues", []):
+            summary = (issue.get("fields") or {}).get("summary")
+            if summary:
+                topics.append(summary)
+
+        total = data.get("total", 0)
+        start_at += max_results
+        if start_at >= total:
+            break
+
+    return topics
+
 class JiraRetriever:
     """Backward compatible class-based API."""
 
