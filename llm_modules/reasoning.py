@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Dict, List
 
 from openai import OpenAI
@@ -14,9 +15,10 @@ class ReasoningEngine:
     def __init__(self, model_name: str = "gpt-4o") -> None:
         self.model_name = model_name
 
-    def analyze(self, documents: list) -> list:
-        """Return list of proposed ideas based on input documents."""
-        return []
+    def analyze(self, documents: List[Dict], jira_issues: List[Dict]) -> List[Dict]:
+        """Return list of proposed ideas based on documentation and JIRA issues."""
+
+        return generate_new_ideas(documents, jira_issues)
 
 
 def generate_new_ideas(docs: List[Dict], jira_ideas: List[Dict]) -> List[Dict]:
@@ -36,7 +38,7 @@ def generate_new_ideas(docs: List[Dict], jira_ideas: List[Dict]) -> List[Dict]:
         ``business_value`` and ``confidence_score``.
     """
 
-    client = OpenAI()  # API key expected via ``OPENAI_API_KEY`` environment var
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     existing_titles = [
         idea.get("title") or idea.get("summary") or "" for idea in jira_ideas
