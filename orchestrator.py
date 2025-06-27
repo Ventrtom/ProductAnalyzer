@@ -60,7 +60,7 @@ class AgentOrchestrator:
         print(f"Fetched {len(jira_issues)} issues")
 
         print("\n== Running reasoning engine ==")
-        ideas = self.reasoning.analyze(roadmap_docs + jira_issues)
+        ideas = self.reasoning.analyze(roadmap_docs, jira_issues)
 
         # Placeholder: integrate deduplication layer here
         # ideas = [i for i in ideas if not self.dedup_checker.is_duplicate(i)]
