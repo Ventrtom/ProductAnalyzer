@@ -76,8 +76,8 @@ class AgentOrchestrator:
         with open("output/ideas.json", "w", encoding="utf-8") as f:
             json.dump(ideas, f, ensure_ascii=False, indent=2)
 
-        # Placeholder: exporting module could be used here in the future
-        # self.exporter.export_markdown(ideas, "output/ideas.md")
+        # Export ideas in Markdown format as well
+        self.exporter.export_markdown(ideas, "output/ideas.md")
 
         return ideas
 
