@@ -14,6 +14,7 @@ from typing import List
 from dotenv import load_dotenv
 
 from deduplication.checker import DeduplicationChecker
+from ideas.composer import IdeaComposer
 from llm_modules.reasoning import ReasoningEngine
 from output.export import IdeaExporter
 from retrievers.jira_retriever import get_roadmap_ideas
@@ -43,6 +44,7 @@ class AgentOrchestrator:
         # Placeholders for future integration
         self.dedup_checker = DeduplicationChecker()
         self.exporter = IdeaExporter()
+        self.composer = IdeaComposer()
 
     def run_agent(self) -> List[dict]:
         """Run the core retrieval and reasoning workflow."""
@@ -65,21 +67,24 @@ class AgentOrchestrator:
         # Placeholder: integrate deduplication layer here
         # ideas = [i for i in ideas if not self.dedup_checker.is_duplicate(i)]
 
-        if not ideas:
+        composed = self.composer.compose(ideas)
+
+        if not composed:
             print("No ideas generated")
         else:
             print("Generated ideas:")
-            for idea in ideas:
-                print(f"- {idea}")
+            for idea in composed:
+                print(f"- {idea['title']}")
 
         os.makedirs("output", exist_ok=True)
         with open("output/ideas.json", "w", encoding="utf-8") as f:
-            json.dump(ideas, f, ensure_ascii=False, indent=2)
+            json.dump(composed, f, ensure_ascii=False, indent=2)
 
         # Export ideas in Markdown format as well
-        self.exporter.export_markdown(ideas, "output/ideas.md")
+        markdown_items = [idea["markdown"] for idea in composed]
+        self.exporter.export_markdown(markdown_items, "output/ideas.md")
 
-        return ideas
+        return composed
 
 
 def main() -> None:
