@@ -1,3 +1,5 @@
+# jira_retriever.py
+
 from __future__ import annotations
 
 """Retrieve JIRA issues for the orchestrator."""
@@ -6,6 +8,7 @@ import os
 from typing import List, Optional
 
 import requests
+from requests.exceptions import HTTPError
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -54,7 +57,7 @@ class JiraIssue(BaseModel):
 def _fetch_issues(jira_url: str, auth_token: str, jql: str, max_results: int) -> List[JiraIssue]:
     """Fetch issues from JIRA using the given JQL query."""
 
-    endpoint = "rest/api/2/search"
+    endpoint = "rest/api/3/search"
     start_at = 0
     issues: List[JiraIssue] = []
 
@@ -65,7 +68,11 @@ def _fetch_issues(jira_url: str, auth_token: str, jql: str, max_results: int) ->
             "maxResults": max_results,
             "fields": "summary,description,status,labels",
         }
-        data = _jira_get(endpoint, params, auth_token, jira_url=jira_url)
+        try:
+            data = _jira_get(endpoint, params, auth_token, jira_url=jira_url)
+        except HTTPError as e:
+            print("JIRA Error response:", e.response.text)
+            raise
 
         for raw in data.get("issues", []):
             f = raw.get("fields", {})

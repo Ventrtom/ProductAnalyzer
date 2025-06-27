@@ -70,7 +70,7 @@ class AgentOrchestrator:
             project_key=self.jira_project_key,
             auth_token=self.jira_token,
             # Quote project key to avoid 400 errors if the key contains digits or other characters
-            jql=f'project="{self.jira_project_key}"',
+            jql=f'project={self.jira_project_key}',
         )
         print(f"Fetched {len(jira_issues)} issues")
 
