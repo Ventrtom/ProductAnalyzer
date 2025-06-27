@@ -69,7 +69,8 @@ class AgentOrchestrator:
             jira_url=self.jira_url,
             project_key=self.jira_project_key,
             auth_token=self.jira_token,
-            jql=f"project={self.jira_project_key}",
+            # Quote project key to avoid 400 errors if the key contains digits or other characters
+            jql=f'project="{self.jira_project_key}"',
         )
         print(f"Fetched {len(jira_issues)} issues")
 

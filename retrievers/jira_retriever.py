@@ -91,7 +91,8 @@ def fetch_all_issues(project_key: str = JIRA_PROJECT_KEY, max_results: int = 50)
 
     if not project_key:
         raise ValueError("Project key must be provided when JIRA_JQL is not used")
-    jql = f"project={project_key}"
+    # Quote the project key to avoid JQL syntax errors for non-alphanumeric keys
+    jql = f'project="{project_key}"'
     return _fetch_issues(JIRA_URL, JIRA_AUTH_TOKEN, jql, max_results)
 
 def get_roadmap_ideas(
@@ -106,14 +107,22 @@ def get_roadmap_ideas(
     jira_url = jira_url or JIRA_URL
     auth_token = auth_token or JIRA_AUTH_TOKEN
     project_key = project_key or JIRA_PROJECT_KEY
-    jql = jql or JIRA_JQL or (f"project={project_key}" if project_key else None)
+    if jql:
+        final_jql = jql
+    elif JIRA_JQL:
+        final_jql = JIRA_JQL
+    elif project_key:
+        # Quote the project key to avoid issues with numeric or special keys
+        final_jql = f'project="{project_key}"'
+    else:
+        final_jql = None
 
     if not jira_url or not auth_token:
         raise ValueError("Missing JIRA_URL or JIRA_AUTH_TOKEN")
-    if not jql:
+    if not final_jql:
         raise ValueError("JQL query could not be determined")
 
-    issues = _fetch_issues(jira_url, auth_token, jql, max_results)
+    issues = _fetch_issues(jira_url, auth_token, final_jql, max_results)
     return [issue.model_dump(exclude={"labels"}) for issue in issues]
 
 class JiraRetriever:
