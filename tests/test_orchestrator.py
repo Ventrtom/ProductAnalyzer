@@ -2,8 +2,22 @@ import json
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
+import os
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+# Provide environment variables so the retriever module loads
+os.environ.setdefault("JIRA_URL", "https://jira.example.com")
+os.environ.setdefault("JIRA_PROJECT_KEY", "PRJ")
+os.environ.setdefault("JIRA_AUTH_TOKEN", "token")
+
+from retrievers import jira_retriever
+
+# Older orchestrator versions import ``get_roadmap_ideas`` while newer use
+# ``fetch_all_issues``. Ensure the expected symbol exists before import.
+if not hasattr(jira_retriever, "get_roadmap_ideas"):
+    jira_retriever.get_roadmap_ideas = jira_retriever.fetch_all_issues
+
 import orchestrator
 from orchestrator import AgentOrchestrator
 
@@ -37,7 +51,8 @@ def test_run_agent_with_mocks(tmp_path, monkeypatch):
     export_magic = MagicMock(side_effect=export_mock)
 
     monkeypatch.setattr(orchestrator, "retrieve_roadmap_documents", retrieve_mock)
-    monkeypatch.setattr(orchestrator, "get_roadmap_ideas", issues_mock)
+    func = "fetch_all_issues" if hasattr(orchestrator, "fetch_all_issues") else "get_roadmap_ideas"
+    monkeypatch.setattr(orchestrator, func, issues_mock)
     monkeypatch.setattr(orchestrator.ReasoningEngine, "analyze", analyze_mock)
     monkeypatch.setattr(orchestrator.IdeaExporter, "export_markdown", export_magic)
 
