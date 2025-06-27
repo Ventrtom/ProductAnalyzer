@@ -71,13 +71,12 @@ class JiraRetriever:
 
 
 class JiraIssue(BaseModel):
-    """Representation of a JIRA issue used by ``get_roadmap_ideas``."""
+    """Representation of a JIRA issue returned by :func:`get_roadmap_ideas`."""
 
     key: str
     summary: Optional[str] = None
     description: Optional[str] = None
     status: Optional[str] = None
-    roadmap: Optional[str] = None
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=5), reraise=True)
@@ -119,7 +118,7 @@ def get_roadmap_ideas(
             "jql": f"project={project_key}",
             "startAt": start_at,
             "maxResults": max_results,
-            "fields": "summary,description,status,roadmap",
+            "fields": "summary,description,status",
         }
 
         data = _get(search_url, params, auth_token)
@@ -132,7 +131,6 @@ def get_roadmap_ideas(
                     summary=fields.get("summary"),
                     description=fields.get("description"),
                     status=(fields.get("status") or {}).get("name"),
-                    roadmap=fields.get("roadmap"),
                 )
             )
 
