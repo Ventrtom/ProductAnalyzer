@@ -11,6 +11,20 @@ ProductAnalyzer is an AI-based agent designed to help Product Managers generate 
 
 Its purpose is to suggest **novel, feasible, and impactful ideas**, identify **system weaknesses**, and recommend **market-aligned improvements** using modern LLMs (e.g., GPT-4o).
 
+## 🚀 Getting Started
+
+1. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. Create a `.env` file in the project root based on `.env.example` and add your values.
+3. Run the orchestrator from the project root:
+   ```bash
+   python orchestrator.py
+   ```
+
+OpenAI API calls require a valid `OPENAI_API_KEY` in your environment.
+
 ---
 
 ## 📦 Architecture Overview
@@ -73,6 +87,7 @@ Create a `.env` file in the project root based on `.env.example` and set:
 - `JIRA_URL` – Base URL of your JIRA instance
 - `JIRA_PROJECT_KEY` – Project key to fetch issues from
 - `JIRA_AUTH_TOKEN` – Base64 token used for Basic Auth
+- `OPENAI_API_KEY` – Your OpenAI API key
 
 ---
 
